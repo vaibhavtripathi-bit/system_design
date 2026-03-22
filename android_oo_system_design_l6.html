@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OO System Design — Google L6 Android Interview</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:         #f5f0e8;
+    --bg2:        #ede8df;
+    --ink:        #1a1410;
+    --ink-mid:    #3d3530;
+    --ink-soft:   #7a6f65;
+    --ink-ghost:  #b0a89e;
+    --red:        #c0392b;
+    --red-dim:    rgba(192,57,43,0.08);
+    --amber:      #b7600a;
+    --amber-dim:  rgba(183,96,10,0.08);
+    --teal:       #0d7a6e;
+    --teal-dim:   rgba(13,122,110,0.08);
+    --navy:       #1a3a5c;
+    --navy-dim:   rgba(26,58,92,0.08);
+    --rule:       rgba(26,20,16,0.12);
+    --radius:     6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+
+  /* ── Noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: var(--ink);
+    color: var(--bg);
+    padding: 72px 60px 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: 'OO';
+    position: absolute;
+    right: -20px; top: -30px;
+    font-family: 'Playfair Display', serif;
+    font-size: 220px;
+    font-weight: 900;
+    color: rgba(255,255,255,0.03);
+    pointer-events: none;
+    line-height: 1;
+    letter-spacing: -10px;
+  }
+  .hero-eyebrow {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .hero-eyebrow::after {
+    content: '';
+    flex: 1;
+    max-width: 60px;
+    height: 1px;
+    background: var(--amber);
+  }
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 5vw, 60px);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -1.5px;
+    margin-bottom: 20px;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--amber);
+  }
+  .hero-desc {
+    font-size: 13px;
+    color: rgba(245,240,232,0.65);
+    max-width: 600px;
+    line-height: 1.9;
+    margin-bottom: 36px;
+  }
+  .hero-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .htag {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border: 1px solid;
+    border-radius: 2px;
+  }
+  .htag-amber { border-color: var(--amber); color: var(--amber); }
+  .htag-teal  { border-color: var(--teal);  color: #3ecfc0; }
+  .htag-light { border-color: rgba(245,240,232,0.2); color: rgba(245,240,232,0.5); }
+
+  /* ── Page body ── */
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 60px 100px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Section heading ── */
+  .sec-head {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 3.5px;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sec-head .pip {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .pip-red   { background: var(--red); }
+  .pip-amber { background: var(--amber); }
+  .pip-teal  { background: var(--teal); }
+  .pip-navy  { background: var(--navy); }
+
+  .block { margin-bottom: 56px; }
+
+  /* ── Callout ── */
+  .callout {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--amber);
+    background: white;
+    padding: 22px 26px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--ink-mid);
+    line-height: 1.85;
+  }
+  .callout strong { color: var(--ink); }
+  .callout em { color: var(--teal); font-style: italic; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 56px;
+  }
+  .stat-cell {
+    background: white;
+    padding: 24px 22px;
+    text-align: center;
+  }
+  .stat-cell .n {
+    font-family: 'Playfair Display', serif;
+    font-size: 42px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .stat-cell .l { font-size: 10px; letter-spacing: 1.5px; color: var(--ink-ghost); text-transform: uppercase; }
+  .sc-red   .n { color: var(--red); }
+  .sc-amber .n { color: var(--amber); }
+  .sc-teal  .n { color: var(--teal); }
+  .sc-navy  .n { color: var(--navy); }
+
+  /* ── Category group ── */
+  .cat-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 40px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .cat-label .icon { font-size: 20px; }
+  .cat-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  /* ── Problem card ── */
+  .prob {
+    background: white;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.15s;
+  }
+  .prob:hover { box-shadow: 0 4px 20px rgba(26,20,16,0.08); }
+
+  .prob-head {
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    align-items: center;
+    padding: 18px 22px;
+    gap: 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .prob-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--ink-ghost);
+    line-height: 1;
+  }
+  .prob-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .prob-pri {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 2px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .pri-crit  { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(192,57,43,0.2); }
+  .pri-high  { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(183,96,10,0.2); }
+  .pri-med   { background: var(--teal-dim);  color: var(--teal);  border: 1px solid rgba(13,122,110,0.2); }
+
+  .prob-body {
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 680px) { .prob-body { grid-template-columns: 1fr; } }
+
+  .prob-section-label {
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    margin-bottom: 8px;
+  }
+  .prob-desc {
+    font-size: 12px;
+    color: var(--ink-mid);
+    line-height: 1.75;
+  }
+  .prob-cases {
+    font-size: 12px;
+    color: var(--ink-mid);
+    line-height: 1.75;
+  }
+  .prob-cases ul {
+    padding-left: 0;
+    list-style: none;
+  }
+  .prob-cases ul li {
+    padding: 2px 0 2px 14px;
+    position: relative;
+    color: var(--ink-soft);
+  }
+  .prob-cases ul li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--ink-ghost);
+    font-size: 10px;
+    top: 3px;
+  }
+
+  .prob-approaches {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ap-tag {
+    font-size: 10.5px;
+    padding: 4px 12px;
+    border-radius: 2px;
+    border: 1px solid var(--rule);
+    background: var(--bg2);
+    color: var(--ink-mid);
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Extensibility section ── */
+  .ext-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 56px;
+  }
+  .ext-card {
+    background: white;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .ext-card h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .ext-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .ext-card ul li {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    padding: 3px 0 3px 12px;
+    position: relative;
+    line-height: 1.6;
+  }
+  .ext-card ul li::before {
+    content: '·';
+    position: absolute;
+    left: 0;
+    color: var(--amber);
+    font-size: 16px;
+    line-height: 1.1;
+  }
+
+  /* ── SOLID principles ── */
+  .solid-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 56px;
+  }
+  @media (max-width: 680px) { .solid-row { grid-template-columns: 1fr 1fr; } }
+  .solid-cell {
+    background: white;
+    padding: 20px 16px;
+    text-align: center;
+  }
+  .solid-cell .letter {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--red);
+    margin-bottom: 6px;
+  }
+  .solid-cell .word {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .solid-cell .desc {
+    font-size: 10px;
+    color: var(--ink-ghost);
+    line-height: 1.5;
+  }
+
+  /* ── Code block ── */
+  .code-block {
+    background: var(--ink);
+    color: #d4cfca;
+    border-radius: var(--radius);
+    padding: 22px 26px;
+    font-size: 12px;
+    line-height: 1.8;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .code-block .kw  { color: #d4a45a; }
+  .code-block .ty  { color: #7ec8c8; }
+  .code-block .cm  { color: #5a5550; }
+  .code-block .str { color: #8eb58e; }
+  .code-block .fn  { color: #c0a0d8; }
+
+  /* ── Prompt block ── */
+  .prompt-wrap {
+    background: var(--ink);
+    border-radius: var(--radius);
+    padding: 32px 36px;
+    margin-bottom: 56px;
+    position: relative;
+  }
+  .prompt-label {
+    position: absolute;
+    top: -1px; left: 28px;
+    background: var(--amber);
+    color: var(--ink);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 0 0 4px 4px;
+  }
+  .prompt-wrap p, .prompt-wrap li {
+    font-size: 12.5px;
+    color: rgba(245,240,232,0.65);
+    line-height: 1.85;
+    margin-bottom: 6px;
+  }
+  .prompt-wrap h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--amber);
+    margin: 22px 0 8px;
+  }
+  .prompt-wrap ul { padding-left: 18px; }
+  .prompt-wrap ul li { list-style: disc; }
+  .prompt-wrap strong { color: rgba(245,240,232,0.9); }
+  .prompt-wrap .note {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border: 1px solid rgba(183,96,10,0.4);
+    border-radius: var(--radius);
+    color: var(--amber) !important;
+    font-size: 12px !important;
+  }
+
+  /* ── Priority table ── */
+  .ptable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin-bottom: 56px;
+  }
+  .ptable th {
+    background: var(--bg2);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+  }
+  .ptable td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink-soft);
+    vertical-align: top;
+  }
+  .ptable tr:last-child td { border-bottom: none; }
+  .ptable tr:hover td { background: white; }
+  .ptable .tname { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; color: var(--ink); }
+  .ptable .cr { color: var(--red) !important; font-weight: 600; }
+  .ptable .hi { color: var(--amber) !important; font-weight: 600; }
+  .ptable .md { color: var(--teal) !important; font-weight: 600; }
+
+  /* ── Footer ── */
+  footer {
+    background: var(--ink);
+    color: rgba(245,240,232,0.35);
+    padding: 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Animations ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero h1 { animation: fadeUp 0.6s ease both; }
+  .hero-desc { animation: fadeUp 0.6s 0.1s ease both; }
+  .hero-tags { animation: fadeUp 0.6s 0.2s ease both; }
+</style>
+</head>
+<body>
+
+<!-- ══ HERO ══ -->
+<div class="hero">
+  <div class="hero-eyebrow">Object-Oriented System Design · Google L6 Android</div>
+  <h1>Real-World<br/><em>System Design</em><br/>Problems</h1>
+  <p class="hero-desc">
+    A second-tier problem set for Staff Engineer candidates. These problems have
+    <strong style="color:rgba(245,240,232,0.9)">no dependency on Android internals</strong> — they test pure
+    object-oriented thinking, SOLID principles, design pattern mastery, and the ability to reason
+    about extensibility, edge cases, and future evolution of a system.
+    Exactly what separates an L5 from an L6.
+  </p>
+  <div class="hero-tags">
+    <span class="htag htag-amber">Google L6 · Staff Engineer</span>
+    <span class="htag htag-teal">Android · Kotlin</span>
+    <span class="htag htag-light">OO Design · No Android Framework</span>
+    <span class="htag htag-light">Unit Tests Only</span>
+    <span class="htag htag-light">20 Problems</span>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="page">
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-cell sc-red">
+      <div class="n">20</div>
+      <div class="l">OO Design Problems</div>
+    </div>
+    <div class="stat-cell sc-amber">
+      <div class="n">6</div>
+      <div class="l">Problem Categories</div>
+    </div>
+    <div class="stat-cell sc-teal">
+      <div class="n">3+</div>
+      <div class="l">Approaches Per Problem</div>
+    </div>
+    <div class="stat-cell sc-navy">
+      <div class="n">40</div>
+      <div class="l">Problems Total (Both Docs)</div>
+    </div>
+  </div>
+
+  <!-- Objective -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-amber"></span>What This Document Is</div>
+    <div class="callout">
+      This is the <strong>companion document</strong> to the Android System Design L6 prep kit.
+      Where the first document focused on Android-specific infrastructure problems (caching, sync, pagination),
+      this one targets a different dimension of the L6 interview: <em>pure object-oriented system design</em>.
+      Problems like designing a lift system, a parking lot, a vending machine, or a chess game test whether
+      a candidate can <strong>model a complex real-world domain cleanly</strong>, reason about edge cases upfront,
+      apply the right design patterns, and structure code so that <strong>new requirements can be absorbed
+      without rewrites</strong>. Same rules as the first doc apply:
+      one Android module per problem, multiple approaches per problem in separate packages,
+      all verified by unit tests only — no UI.
+    </div>
+  </div>
+
+  <!-- SOLID reminder -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-red"></span>The L6 Lens — SOLID at Every Level</div>
+    <p style="font-size:12px; color:var(--ink-soft); margin-bottom:16px; line-height:1.85;">
+      Every problem in this set should be evaluated through the SOLID lens. An L6 candidate doesn't just implement —
+      they proactively identify where each principle is stressed, and design accordingly.
+    </p>
+    <div class="solid-row">
+      <div class="solid-cell">
+        <div class="letter">S</div>
+        <div class="word">Single Responsibility</div>
+        <div class="desc">Each class owns exactly one reason to change</div>
+      </div>
+      <div class="solid-cell">
+        <div class="letter">O</div>
+        <div class="word">Open / Closed</div>
+        <div class="desc">Extend without modifying existing code</div>
+      </div>
+      <div class="solid-cell">
+        <div class="letter">L</div>
+        <div class="word">Liskov Substitution</div>
+        <div class="desc">Subtypes must honour the base contract</div>
+      </div>
+      <div class="solid-cell">
+        <div class="letter">I</div>
+        <div class="word">Interface Segregation</div>
+        <div class="desc">No client forced to depend on unused methods</div>
+      </div>
+      <div class="solid-cell">
+        <div class="letter">D</div>
+        <div class="word">Dependency Inversion</div>
+        <div class="desc">Depend on abstractions, not concretions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Extensibility framework -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-teal"></span>Extensibility Framework — Required Per Problem</div>
+    <p style="font-size:12px; color:var(--ink-soft); margin-bottom:16px; line-height:1.85;">
+      For each problem, the solution must explicitly address the following extensibility axes.
+      This is what L6 looks like versus L5 — not just "it works," but "here's where the seams are."
+    </p>
+    <div class="ext-grid">
+      <div class="ext-card">
+        <h4>Critical Edge Cases</h4>
+        <ul>
+          <li>What happens at capacity limits?</li>
+          <li>What if a dependency fails mid-operation?</li>
+          <li>Concurrent access to shared state</li>
+          <li>Invalid or out-of-order inputs</li>
+          <li>Partial failure scenarios</li>
+        </ul>
+      </div>
+      <div class="ext-card">
+        <h4>Future Feature Hooks</h4>
+        <ul>
+          <li>Where would a new type be added?</li>
+          <li>Which interfaces absorb new behaviour?</li>
+          <li>What would require a breaking change?</li>
+          <li>Where is the Open/Closed boundary?</li>
+        </ul>
+      </div>
+      <div class="ext-card">
+        <h4>State Machine Design</h4>
+        <ul>
+          <li>Is there an explicit state machine?</li>
+          <li>Are invalid transitions guarded?</li>
+          <li>Can state be persisted and restored?</li>
+          <li>Is the state machine testable in isolation?</li>
+        </ul>
+      </div>
+      <div class="ext-card">
+        <h4>Observer / Event Hooks</h4>
+        <ul>
+          <li>Who needs to react to state changes?</li>
+          <li>Push vs pull notification model</li>
+          <li>How are listeners decoupled from source?</li>
+          <li>Lifecycle of listener registration</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PROBLEMS ══ -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-red"></span>20 OO System Design Problems</div>
+
+    <!-- ── PHYSICAL SYSTEMS ── -->
+    <div class="cat-label"><span class="icon">🏗️</span> Physical World Systems</div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">01</div>
+        <div class="prob-title">Lift / Elevator System</div>
+        <div class="prob-pri pri-crit">Critical</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Design a multi-lift building system. Handle floor requests (inside cabin and outside buttons), dispatch algorithm, door mechanics, overweight sensor, emergency stop, and maintenance mode. Model the full lifecycle of a single trip.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Multiple simultaneous requests — dispatch strategy</li>
+            <li>Lift at capacity — reject vs queue</li>
+            <li>Door blocked / sensor fault mid-close</li>
+            <li>Power failure mid-floor — safe landing protocol</li>
+            <li>Adding a new dispatch algorithm without touching Lift</li>
+            <li>VIP floor access (future extensibility hook)</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">State Machine (IDLE→MOVING→STOPPED→DOORS_OPEN)</span>
+          <span class="ap-tag">Strategy Pattern (dispatch algorithms: FCFS, SCAN, LOOK)</span>
+          <span class="ap-tag">Command Pattern (floor requests as queued commands)</span>
+          <span class="ap-tag">Observer (door/weight sensors notify controller)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">02</div>
+        <div class="prob-title">Parking Lot System</div>
+        <div class="prob-pri pri-crit">Critical</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Multi-floor parking lot with different spot types (compact, large, handicapped, EV), multiple entry/exit gates, ticket generation, fee calculation, and spot assignment strategy.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Lot full — all entry gates reject simultaneously</li>
+            <li>Ticket lost — fallback pricing policy</li>
+            <li>EV spot requested but none free — degrade to regular</li>
+            <li>Multi-vehicle type extending without changing lot logic</li>
+            <li>Dynamic pricing (future hook)</li>
+            <li>Concurrent entry/exit race condition</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (spot assignment: nearest, by type, by floor)</span>
+          <span class="ap-tag">Factory Pattern (vehicle + spot type creation)</span>
+          <span class="ap-tag">Decorator (pricing: base + time + peak + discount)</span>
+          <span class="ap-tag">Template Method (entry/exit flow with overridable steps)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">03</div>
+        <div class="prob-title">Vending Machine</div>
+        <div class="prob-pri pri-crit">Critical</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">A vending machine with multiple product slots, coin/note payment, change dispensing, refill mode, and admin override. Handle partial payment, expired products, and stuck dispenser scenarios.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Exact change not available — refuse or notify</li>
+            <li>Product stuck in dispenser — compensation flow</li>
+            <li>Payment inserted for out-of-stock item</li>
+            <li>Admin refill mid-transaction</li>
+            <li>New payment type (card/QR) added without core changes</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">State Machine (IDLE→HAS_MONEY→DISPENSING→CHANGE)</span>
+          <span class="ap-tag">Strategy (payment processor interface)</span>
+          <span class="ap-tag">Chain of Responsibility (coin validation pipeline)</span>
+          <span class="ap-tag">Command Pattern (transaction as reversible commands)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">04</div>
+        <div class="prob-title">ATM Machine</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Card insertion, PIN validation, account selection, withdrawal/deposit/balance inquiry, receipt printing, and session timeout. Model the cash cassette and note denomination selection.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Card swallowed after 3 PIN failures</li>
+            <li>Insufficient cash in machine (partial denomination)</li>
+            <li>Network timeout mid-transaction — reversal</li>
+            <li>Session timeout mid-PIN entry</li>
+            <li>New transaction type added without state machine change</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">State Machine (card states + session states)</span>
+          <span class="ap-tag">Chain of Responsibility (denomination dispensing)</span>
+          <span class="ap-tag">Proxy (network banking service with retry)</span>
+          <span class="ap-tag">Command + Undo (transaction reversal)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">05</div>
+        <div class="prob-title">Traffic Light Controller</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">A 4-way intersection traffic light system with pedestrian signals, emergency vehicle override, timed cycles, and adaptive timing based on traffic density sensors.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Emergency vehicle preemption and graceful resume</li>
+            <li>Sensor failure — fallback to fixed timing</li>
+            <li>All-red safety interval enforcement</li>
+            <li>Adding a new lane type without changing the controller</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">State Machine (per-signal: RED→GREEN→YELLOW)</span>
+          <span class="ap-tag">Observer (sensor events trigger controller)</span>
+          <span class="ap-tag">Strategy (timing algorithm: fixed vs adaptive)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── GAMES ── -->
+    <div class="cat-label"><span class="icon">♟️</span> Games &amp; Simulation</div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">06</div>
+        <div class="prob-title">Chess Game Engine</div>
+        <div class="prob-pri pri-crit">Critical</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Board representation, piece movement rules, check/checkmate/stalemate detection, move validation, castling, en passant, pawn promotion. Support for game replay and undo.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Move that exposes own king — illegal move guard</li>
+            <li>Discovered check detection</li>
+            <li>50-move rule and threefold repetition draw</li>
+            <li>Undo stack with full state restoration</li>
+            <li>New chess variant (e.g. Chess960) without rewriting pieces</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (movement rules per piece type)</span>
+          <span class="ap-tag">Command + Memento (move history + undo)</span>
+          <span class="ap-tag">Visitor (board evaluation, check detection)</span>
+          <span class="ap-tag">Composite (piece collection + board)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">07</div>
+        <div class="prob-title">Snake &amp; Ladders / Board Game Engine</div>
+        <div class="prob-pri pri-med">Medium</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Generalised board game engine supporting multiple game types. Dice rolling, player turn management, special cell effects (snakes, ladders, skip, bonus), win condition pluggability.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Snake at last cell — should player win first or snake bite?</li>
+            <li>Multiple players landing on same cell</li>
+            <li>Adding a new special cell type (wormhole)</li>
+            <li>Deterministic dice for testing</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (dice, win condition, cell effect)</span>
+          <span class="ap-tag">Decorator (cell effects as stackable decorators)</span>
+          <span class="ap-tag">Template Method (turn flow with overridable hooks)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">08</div>
+        <div class="prob-title">Card Game Engine (Blackjack / Poker)</div>
+        <div class="prob-pri pri-med">Medium</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Deck representation, shuffle strategies, deal mechanics, hand evaluation, player action handling (hit, stand, fold, raise), pot management, and side-bet support.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Deck exhaustion mid-game</li>
+            <li>Ace as 1 or 11 (Blackjack ambiguity)</li>
+            <li>All-in edge case in Poker</li>
+            <li>Adding a new game variant reusing deck/hand engine</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (shuffle algorithm, hand evaluator)</span>
+          <span class="ap-tag">State Machine (player turns, round phases)</span>
+          <span class="ap-tag">Factory (game type creates correct rules engine)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BOOKING / RESERVATION ── -->
+    <div class="cat-label"><span class="icon">🎟️</span> Booking &amp; Reservation Systems</div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">09</div>
+        <div class="prob-title">Movie Ticket Booking System</div>
+        <div class="prob-pri pri-crit">Critical</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Theatre, screen, show, seat layout, booking flow, payment, cancellation/refund policy, seat locking during checkout, and waitlist. Support multiple cinemas in a city.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Two users selecting same seat simultaneously — locking</li>
+            <li>Payment timeout — seat released atomically</li>
+            <li>Partial booking — group of 5, only 3 adjacent available</li>
+            <li>Cancellation after show starts — no refund guard</li>
+            <li>Adding a new seat category (recliner) without rebooking logic</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (seat selection: best available, manual, accessible)</span>
+          <span class="ap-tag">State Machine (seat: AVAILABLE→LOCKED→BOOKED→CANCELLED)</span>
+          <span class="ap-tag">Observer (waitlist notified on cancellation)</span>
+          <span class="ap-tag">Decorator (pricing: category + time + discount)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">10</div>
+        <div class="prob-title">Hotel / Room Reservation System</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Room types, availability calendar, booking + modification + cancellation, pricing by date range, loyalty points, housekeeping state, and multi-property support.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Overlapping date range booking conflict</li>
+            <li>Early check-in — room not yet cleaned</li>
+            <li>Overbooking policy (allow or reject)</li>
+            <li>Adding a new room type without changing booking engine</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (room search: by type, price, availability)</span>
+          <span class="ap-tag">State Machine (room: AVAILABLE→RESERVED→OCCUPIED→CLEANING)</span>
+          <span class="ap-tag">Decorator (price: base + season + loyalty + promo)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">11</div>
+        <div class="prob-title">Flight Booking System</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Flights, seats by class (economy/business/first), fare rules, stopover routing, baggage policy, check-in flow, seat upgrade, and overbooking management.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Connecting flight missed — rebooking cascade</li>
+            <li>Seat downgrade — compensation logic</li>
+            <li>Last seat simultaneously booked by two users</li>
+            <li>New fare class (premium economy) without touching booking core</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (routing: direct, cheapest, fastest)</span>
+          <span class="ap-tag">State Machine (booking lifecycle)</span>
+          <span class="ap-tag">Chain of Responsibility (fare rule validation)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── COMMERCE & LOGISTICS ── -->
+    <div class="cat-label"><span class="icon">📦</span> Commerce &amp; Logistics</div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">12</div>
+        <div class="prob-title">Online Shopping Cart &amp; Order System</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Cart management, inventory reservation, coupon/discount engine, multiple payment methods, order state machine, partial fulfillment, return/refund flow.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Item goes out of stock mid-checkout</li>
+            <li>Coupon stacking — valid combinations only</li>
+            <li>Partial shipment — some items available now</li>
+            <li>Payment partial failure — order rollback</li>
+            <li>New discount type without changing cart logic</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Decorator (discount: flat + percent + BOGO + loyalty)</span>
+          <span class="ap-tag">State Machine (order lifecycle)</span>
+          <span class="ap-tag">Strategy (payment processor abstraction)</span>
+          <span class="ap-tag">Observer (inventory → cart notification)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">13</div>
+        <div class="prob-title">Food Delivery System (Zomato / Uber Eats model)</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Restaurant menu management, order placement, kitchen queue, delivery assignment, live tracking state machine, rating system, and surge pricing.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Restaurant rejects order after payment</li>
+            <li>Delivery agent unassigned mid-delivery</li>
+            <li>Item unavailable after order placed</li>
+            <li>Adding a new delivery mode (drone) without core change</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">State Machine (order: PLACED→ACCEPTED→PREPARING→OUT→DELIVERED)</span>
+          <span class="ap-tag">Strategy (delivery assignment algorithm)</span>
+          <span class="ap-tag">Observer (live status push to customer)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">14</div>
+        <div class="prob-title">Library Management System</div>
+        <div class="prob-pri pri-med">Medium</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Book catalogue, member management, borrow/return/renew flow, fine calculation, reservation queue, and multi-branch support with inter-library transfer.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Same book borrowed and requested simultaneously</li>
+            <li>Member with unpaid fine attempts new borrow</li>
+            <li>Book overdue and reserved by another — auto-recall</li>
+            <li>New media type (e-book, audiobook) without changing borrow logic</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">State Machine (book copy: AVAILABLE→BORROWED→RESERVED→LOST)</span>
+          <span class="ap-tag">Strategy (fine calculation: per-day, tiered, capped)</span>
+          <span class="ap-tag">Observer (reservation queue → notify on return)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VEHICLES & TRANSIT ── -->
+    <div class="cat-label"><span class="icon">🚗</span> Vehicles &amp; Transit</div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">15</div>
+        <div class="prob-title">Ride-Sharing System (Uber model)</div>
+        <div class="prob-pri pri-crit">Critical</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Ride request, driver matching, pricing, trip state machine, split fare, driver rating, surge pricing engine, and cancellation policies for both rider and driver.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Driver cancels after arrival — penalise and rematch</li>
+            <li>Rider cancels mid-trip — partial charge</li>
+            <li>Surge pricing boundary — route crosses surge zone</li>
+            <li>No drivers available — ETA + retry strategy</li>
+            <li>New ride type (shared/pool) without touching matching core</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (matching: nearest, highest-rated, surge-aware)</span>
+          <span class="ap-tag">State Machine (ride: REQUESTED→MATCHED→ARRIVED→IN_TRIP→DONE)</span>
+          <span class="ap-tag">Decorator (pricing: base + surge + tolls + promo)</span>
+          <span class="ap-tag">Observer (driver location → rider ETA updates)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">16</div>
+        <div class="prob-title">Vehicle Rental System</div>
+        <div class="prob-pri pri-med">Medium</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Fleet of vehicle types, reservation with date range, pick-up/drop-off at different locations, damage reporting, fuel policy, and loyalty tier pricing.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Vehicle not returned on time — auto-extend or penalty</li>
+            <li>Damage claimed by next renter — attribution dispute model</li>
+            <li>Fleet unavailable at pickup location — transfer vehicle</li>
+            <li>New vehicle category added (e-scooter) seamlessly</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (vehicle selection, pricing tiers)</span>
+          <span class="ap-tag">State Machine (vehicle: AVAILABLE→RESERVED→RENTED→MAINTENANCE)</span>
+          <span class="ap-tag">Decorator (price modifiers)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SOCIAL & COMMUNICATION ── -->
+    <div class="cat-label"><span class="icon">💬</span> Social &amp; Communication</div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">17</div>
+        <div class="prob-title">Social Media Feed (Twitter / LinkedIn model)</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Post creation (text, media, poll), follow/unfollow graph, feed generation (timeline), like/comment/share actions, notification fanout, and content moderation hooks.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>User with 10M followers posts — fanout strategy</li>
+            <li>Deleted post still in cached feeds</li>
+            <li>Circular follow (A→B, B→A) in recommendation</li>
+            <li>New post type (story, reel) without feed engine changes</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (feed generation: push vs pull vs hybrid)</span>
+          <span class="ap-tag">Observer (post event → notification fanout)</span>
+          <span class="ap-tag">Decorator (post enrichment: media, polls, embeds)</span>
+          <span class="ap-tag">Composite (threaded comments)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">18</div>
+        <div class="prob-title">Notification System (Multi-channel)</div>
+        <div class="prob-pri pri-high">High</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Route notifications across channels (push, email, SMS, in-app), user preference management, priority levels, DND windows, deduplication, and delivery receipt tracking.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Primary channel fails — fallback chain</li>
+            <li>DND window respected per-channel per-user</li>
+            <li>Duplicate suppression for burst events</li>
+            <li>New channel (WhatsApp) added without routing logic change</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Chain of Responsibility (channel fallback pipeline)</span>
+          <span class="ap-tag">Strategy (per-channel delivery implementation)</span>
+          <span class="ap-tag">Decorator (priority + DND + dedup wrappers)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">19</div>
+        <div class="prob-title">Splitwise / Expense Sharing System</div>
+        <div class="prob-pri pri-med">Medium</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Group expense tracking, split strategies (equal, percentage, exact, share-based), debt simplification algorithm, settle-up flow, and multi-currency support.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Circular debt — A owes B, B owes C, C owes A</li>
+            <li>Split doesn't add up to total — rounding policy</li>
+            <li>Member leaves group with outstanding balance</li>
+            <li>New split type (tip-inclusive) without changing group logic</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (split algorithm: equal, percent, shares, exact)</span>
+          <span class="ap-tag">Graph-based (debt simplification: min transactions)</span>
+          <span class="ap-tag">Command (expense add/edit/delete as undoable commands)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob">
+      <div class="prob-head">
+        <div class="prob-num">20</div>
+        <div class="prob-title">URL Shortener</div>
+        <div class="prob-pri pri-med">Medium</div>
+      </div>
+      <div class="prob-body">
+        <div>
+          <div class="prob-section-label">Problem Scope</div>
+          <div class="prob-desc">Short code generation strategies, redirect resolution, click analytics, expiry, custom aliases, abuse detection (NSFW / phishing), and rate limiting per user.</div>
+        </div>
+        <div>
+          <div class="prob-section-label">Critical Cases to Solve</div>
+          <div class="prob-cases"><ul>
+            <li>Hash collision on short code generation</li>
+            <li>Expired URL still in DNS cache</li>
+            <li>Same long URL submitted twice — dedup or new code?</li>
+            <li>New encoding strategy (Base58 vs nanoid) without breaking existing links</li>
+          </ul></div>
+        </div>
+        <div class="prob-approaches">
+          <span class="ap-tag">Strategy (code generation: hash, counter, random, nanoid)</span>
+          <span class="ap-tag">Decorator (redirect: analytics + abuse check + expiry)</span>
+          <span class="ap-tag">Proxy (cache-aside for hot redirects)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Priority Table -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-navy"></span>Interview Priority Guide</div>
+    <table class="ptable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Problem</th>
+          <th>Priority</th>
+          <th>Why it matters at L6</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>01</td><td class="tname">Lift / Elevator System</td><td class="cr">🔴 Critical</td><td>Classic state machine + dispatch strategy — asked most frequently</td></tr>
+        <tr><td>09</td><td class="tname">Movie Ticket Booking</td><td class="cr">🔴 Critical</td><td>Concurrency in seat locking, state machine, waitlist observer</td></tr>
+        <tr><td>15</td><td class="tname">Ride-Sharing System</td><td class="cr">🔴 Critical</td><td>Matching strategy, pricing decorators, complex state machine</td></tr>
+        <tr><td>06</td><td class="tname">Chess Game Engine</td><td class="cr">🔴 Critical</td><td>Deep OO modelling, visitor for board eval, command+memento for undo</td></tr>
+        <tr><td>02</td><td class="tname">Parking Lot System</td><td class="cr">🔴 Critical</td><td>Foundational OO design — every L6 candidate expected to nail this</td></tr>
+        <tr><td>03</td><td class="tname">Vending Machine</td><td class="cr">🔴 Critical</td><td>State machine + CoR + payment strategy — very commonly asked</td></tr>
+        <tr><td>12</td><td class="tname">Shopping Cart &amp; Order</td><td class="hi">🟡 High</td><td>Decorator for discounts, state machine, inventory observer</td></tr>
+        <tr><td>17</td><td class="tname">Social Media Feed</td><td class="hi">🟡 High</td><td>Push vs pull fanout strategy — breadth of systems thinking</td></tr>
+        <tr><td>18</td><td class="tname">Notification System</td><td class="hi">🟡 High</td><td>CoR + strategy combo, DND logic, fallback chains</td></tr>
+        <tr><td>13</td><td class="tname">Food Delivery System</td><td class="hi">🟡 High</td><td>Complex state machine, observer for live tracking</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Claude Code Prompt -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-amber"></span>Claude Code Prompt</div>
+    <div class="prompt-wrap">
+      <div class="prompt-label">Claude Code Prompt — OO System Design</div>
+
+      <p>Set up an <strong>OOSystemDesign/</strong> directory in this Android project. For each problem below, create a separate Android module. These problems have <strong>no dependency on Android internals</strong> — all logic should be pure Kotlin where possible.</p>
+
+      <h3>Structure Rules</h3>
+      <ul>
+        <li>One module per problem, kebab-case naming (e.g. <strong>elevator-system/</strong>, <strong>parking-lot/</strong>)</li>
+        <li>One package per approach inside each module: <strong>approach_01_state_machine/</strong>, <strong>approach_02_strategy_pattern/</strong> etc.</li>
+        <li>No UI required — empty Activity only if Android module structure demands it</li>
+        <li>All logic verified via <strong>Unit Tests only</strong> — JUnit, MockK, Coroutines Test as needed</li>
+      </ul>
+
+      <h3>Per-Problem Requirements</h3>
+      <ul>
+        <li>KDoc block per approach: pattern used, trade-offs, when to prefer it</li>
+        <li>Explicit modelling of critical edge cases (listed per problem below) — each must have a unit test</li>
+        <li>Each problem must document: <strong>where a new type would be added</strong>, and <strong>what would require a breaking change</strong></li>
+        <li>Minimum 2–3 distinct approaches per problem using different design patterns or architectural styles</li>
+      </ul>
+
+      <h3>Approach Variation Axes</h3>
+      <ul>
+        <li><strong>Behavioural patterns:</strong> Strategy, Command, Observer, Chain of Responsibility, State Machine, Template Method, Visitor, Memento</li>
+        <li><strong>Structural patterns:</strong> Decorator, Composite, Proxy, Facade, Adapter, Bridge</li>
+        <li><strong>Creational patterns:</strong> Factory Method, Abstract Factory, Builder, Prototype</li>
+        <li><strong>Architecture:</strong> Push vs Pull, Event-driven vs Request-response, Eager vs Lazy init</li>
+      </ul>
+
+      <h3>Problems to Implement</h3>
+      <ul>
+        <li>#01 Elevator System — state machine, dispatch strategy (FCFS/SCAN/LOOK), door/weight sensors, emergency stop, VIP floor hook</li>
+        <li>#02 Parking Lot — spot types, multi-floor, concurrent entry/exit, dynamic pricing hook</li>
+        <li>#03 Vending Machine — payment pipeline, stuck dispenser, admin mid-transaction refill</li>
+        <li>#04 ATM Machine — card states, denomination dispensing (CoR), transaction reversal</li>
+        <li>#05 Traffic Light Controller — emergency preemption, sensor failure fallback, adaptive timing</li>
+        <li>#06 Chess Game Engine — piece movement strategies, check detection (Visitor), Command+Memento undo</li>
+        <li>#07 Board Game Engine — generalised for Snake &amp; Ladders, pluggable dice and win condition</li>
+        <li>#08 Card Game Engine — Blackjack/Poker, deck exhaustion, Ace ambiguity, variant extension</li>
+        <li>#09 Movie Ticket Booking — seat locking concurrency, waitlist observer, seat state machine</li>
+        <li>#10 Hotel Reservation — date range conflict, overbooking policy, room state machine</li>
+        <li>#11 Flight Booking — connecting flight cascade, fare rule CoR, seat downgrade compensation</li>
+        <li>#12 Shopping Cart &amp; Orders — discount decorator stack, partial fulfilment, order state machine</li>
+        <li>#13 Food Delivery — order state machine, delivery assignment strategy, live status observer</li>
+        <li>#14 Library Management — borrow state machine, overdue auto-recall, new media type extension</li>
+        <li>#15 Ride-Sharing — matching strategy, surge pricing decorator, cancellation policies</li>
+        <li>#16 Vehicle Rental — fleet state machine, damage attribution model, vehicle category extension</li>
+        <li>#17 Social Media Feed — push vs pull fanout strategy, post type decorator, circular follow guard</li>
+        <li>#18 Notification System — channel fallback CoR, DND decorator, deduplication</li>
+        <li>#19 Expense Sharing — split strategy, circular debt graph simplification, undo commands</li>
+        <li>#20 URL Shortener — code generation strategy, redirect proxy with analytics + expiry decorators</li>
+      </ul>
+
+      <p class="note"><strong>Start by confirming the module list and directory structure. Do not write any code yet. This targets a Google L6 / Staff Engineer Android interview. Focus on pure OO design — no Android framework dependencies except where structurally required.</strong></p>
+    </div>
+  </div>
+
+  <!-- Combined summary -->
+  <div class="block">
+    <div class="sec-head"><span class="pip pip-teal"></span>Combined Study Plan — Both Documents</div>
+    <div class="callout" style="border-left-color: var(--teal);">
+      You now have <strong>40 system design problems</strong> across two documents targeting the Google L6 Android Staff Engineer interview.
+      <br/><br/>
+      <strong>Document 1 (Android System Design)</strong> — 20 problems focused on Android infrastructure: caching, networking, sync, concurrency, observability, and app architecture internals. Best for demonstrating platform depth.<br/><br/>
+      <strong>Document 2 (OO System Design — this doc)</strong> — 20 problems focused on real-world domain modelling: physical systems, games, booking, commerce, and social. Best for demonstrating design pattern mastery, extensibility thinking, and clean OO reasoning.<br/><br/>
+      <em>An L6 candidate is expected to be strong in both dimensions. Start with the 🔴 Critical problems in each doc.</em>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <span>OO System Design · Google L6 Android Staff Engineer Prep</span>
+  <span>20 OO Problems · 40 Total Across Both Docs</span>
+</footer>
+
+</body>
+</html>
