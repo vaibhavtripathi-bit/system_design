@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Android System Design — Google L6 Interview Prep</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface-2: #181c24;
+    --border: #1e2330;
+    --accent: #4f8eff;
+    --accent-dim: rgba(79,142,255,0.12);
+    --accent-2: #00e5a0;
+    --accent-2-dim: rgba(0,229,160,0.10);
+    --accent-3: #ff6b6b;
+    --accent-3-dim: rgba(255,107,107,0.10);
+    --accent-4: #f7c948;
+    --accent-4-dim: rgba(247,201,72,0.10);
+    --text: #e8eaf0;
+    --text-muted: #6b7280;
+    --text-dim: #9ca3af;
+    --tag-bg: #1a1f2e;
+    --radius: 10px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: linear-gradient(135deg, #0d1117 0%, #0a0f1e 60%, #06090f 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 64px 48px 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -120px; left: -80px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(79,142,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -100px; right: -60px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(0,229,160,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hero-label::before {
+    content: '';
+    display: inline-block;
+    width: 24px; height: 2px;
+    background: var(--accent);
+  }
+  .hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -1px;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+    max-width: 640px;
+    margin-bottom: 32px;
+    line-height: 1.8;
+  }
+  .hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 999px;
+    border: 1px solid;
+    letter-spacing: 0.5px;
+  }
+  .badge-blue  { background: var(--accent-dim);   border-color: rgba(79,142,255,0.3);  color: var(--accent); }
+  .badge-green { background: var(--accent-2-dim);  border-color: rgba(0,229,160,0.3);   color: var(--accent-2); }
+  .badge-red   { background: var(--accent-3-dim);  border-color: rgba(255,107,107,0.3); color: var(--accent-3); }
+  .badge-gold  { background: var(--accent-4-dim);  border-color: rgba(247,201,72,0.3);  color: var(--accent-4); }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 48px 80px;
+  }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: rgba(79,142,255,0.3); }
+
+  .card-accent-blue  { border-left: 3px solid var(--accent); }
+  .card-accent-green { border-left: 3px solid var(--accent-2); }
+  .card-accent-red   { border-left: 3px solid var(--accent-3); }
+  .card-accent-gold  { border-left: 3px solid var(--accent-4); }
+
+  /* ── Overview grid ── */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  .overview-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .overview-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .ov-blue::before  { background: var(--accent); }
+  .ov-green::before { background: var(--accent-2); }
+  .ov-red::before   { background: var(--accent-3); }
+  .ov-gold::before  { background: var(--accent-4); }
+
+  .overview-card .num {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .ov-blue  .num { color: var(--accent); }
+  .ov-green .num { color: var(--accent-2); }
+  .ov-red   .num { color: var(--accent-3); }
+  .ov-gold  .num { color: var(--accent-4); }
+
+  .overview-card .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Problem list ── */
+  .problems-section { margin-bottom: 48px; }
+  .group-header {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dim);
+    padding: 10px 0 10px;
+    margin-top: 32px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .group-header .icon { font-size: 16px; }
+  .group-header .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .problem-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    align-items: start;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .problem-card:hover {
+    background: var(--surface-2);
+    border-color: rgba(79,142,255,0.25);
+  }
+  .problem-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding-top: 2px;
+  }
+  .problem-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .problem-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  /* ── Code block ── */
+  .code-block {
+    background: #0d1017;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    font-size: 12.5px;
+    line-height: 1.8;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .code-block .kw  { color: #c792ea; }
+  .code-block .str { color: var(--accent-2); }
+  .code-block .cm  { color: #546e7a; }
+  .code-block .fn  { color: var(--accent); }
+  .code-block .nr  { color: var(--accent-4); }
+
+  /* ── Rules list ── */
+  .rules-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 700px) { .rules-grid { grid-template-columns: 1fr; } }
+
+  .rule-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .rule-card h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .rule-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .rule-card ul li {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 4px 0;
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.6;
+  }
+  .rule-card ul li::before {
+    content: '›';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ── Approach axis ── */
+  .axis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 48px;
+  }
+  .axis-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .axis-card .axis-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .axis-card .axis-examples {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+  .axis-blue  .axis-label { color: var(--accent); }
+  .axis-green .axis-label { color: var(--accent-2); }
+  .axis-red   .axis-label { color: var(--accent-3); }
+  .axis-gold  .axis-label { color: var(--accent-4); }
+
+  /* ── Priority table ── */
+  .priority-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 48px;
+    font-size: 12.5px;
+  }
+  .priority-table th {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .priority-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    vertical-align: top;
+  }
+  .priority-table tr:last-child td { border-bottom: none; }
+  .priority-table tr:hover td { background: var(--surface-2); }
+  .priority-table .name-col {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .p-high { color: var(--accent-3) !important; font-weight: 600; }
+  .p-med  { color: var(--accent-4) !important; font-weight: 600; }
+  .p-low  { color: var(--text-muted) !important; }
+
+  /* ── Prompt block ── */
+  .prompt-block {
+    background: #060810;
+    border: 1px solid rgba(79,142,255,0.25);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 48px;
+    position: relative;
+  }
+  .prompt-block::before {
+    content: 'CLAUDE CODE PROMPT';
+    position: absolute;
+    top: -1px; left: 24px;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    padding: 3px 10px;
+    border-radius: 0 0 6px 6px;
+  }
+  .prompt-block p, .prompt-block li {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.8;
+    margin-bottom: 6px;
+  }
+  .prompt-block h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-2);
+    margin: 18px 0 8px;
+  }
+  .prompt-block ul { padding-left: 18px; }
+  .prompt-block ul li { list-style: disc; color: var(--text-dim); }
+  .prompt-block strong { color: var(--text); font-weight: 600; }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ── Spacer ── */
+  .spacer { margin-bottom: 48px; }
+  h2.block-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .block-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ HERO ══════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-label">Android Engineering — Interview Preparation</div>
+  <h1>Android System Design<br/><span>Google L6 Interview Prep</span></h1>
+  <p class="hero-sub">
+    A structured, code-driven study plan for Staff Engineer candidates targeting
+    the Google L6 Android interview. All problems are solved in Android modules
+    using multiple design patterns and approaches, verified entirely through unit tests.
+  </p>
+  <div class="hero-badges">
+    <span class="badge badge-blue">Staff Engineer · L6</span>
+    <span class="badge badge-green">Android · Kotlin</span>
+    <span class="badge badge-red">20 System Design Problems</span>
+    <span class="badge badge-gold">Unit Tests Only · No UI</span>
+  </div>
+</div>
+
+<!-- ══ MAIN CONTENT ══════════════════════════════════════════════════ -->
+<div class="container">
+
+  <!-- Overview Stats -->
+  <div class="overview-grid">
+    <div class="overview-card ov-blue">
+      <div class="num">20</div>
+      <div class="label">System Design Problems</div>
+    </div>
+    <div class="overview-card ov-green">
+      <div class="num">5</div>
+      <div class="label">Problem Categories</div>
+    </div>
+    <div class="overview-card ov-red">
+      <div class="num">3+</div>
+      <div class="label">Approaches Per Problem</div>
+    </div>
+    <div class="overview-card ov-gold">
+      <div class="num">L6</div>
+      <div class="label">Target Interview Level</div>
+    </div>
+  </div>
+
+  <!-- ── OBJECTIVE ── -->
+  <div class="spacer">
+    <div class="section-title"><span class="dot"></span>Objective</div>
+    <div class="card card-accent-blue">
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.9;">
+        This project is a <strong style="color:var(--text)">hands-on Android system design study kit</strong> targeting the
+        <strong style="color:var(--accent)">Google Staff Engineer (L6) interview</strong>. The goal is not to build
+        production apps, but to <strong style="color:var(--text)">deeply explore design trade-offs</strong> by solving
+        each system design problem using multiple architectural patterns and approaches —
+        all verified through unit tests. Every solution should be accompanied by clear
+        reasoning about <strong style="color:var(--text)">when that approach makes sense</strong>, what it trades off,
+        and how it compares to the alternatives within the same module.
+        This mirrors exactly what an L6 interview expects: <em style="color:var(--accent-2)">breadth of knowledge,
+        depth of reasoning, and the ability to navigate trade-offs confidently.</em>
+      </p>
+    </div>
+  </div>
+
+  <!-- ── PROJECT STRUCTURE RULES ── -->
+  <div class="spacer">
+    <div class="section-title"><span class="dot"></span>Project Structure Rules</div>
+    <div class="code-block">
+<span class="cm">// Directory layout</span>
+SystemDesign/
+├── <span class="fn">image-loader</span>/
+│   ├── src/main/java/com/systemdesign/imageloader/
+│   │   ├── <span class="str">approach_01_strategy_pattern</span>/
+│   │   ├── <span class="str">approach_02_decorator_pattern</span>/
+│   │   └── <span class="str">approach_03_reactive_pipeline</span>/
+│   └── src/test/java/com/systemdesign/imageloader/
+│       ├── <span class="str">Approach01Test.kt</span>
+│       ├── <span class="str">Approach02Test.kt</span>
+│       └── <span class="str">Approach03Test.kt</span>
+├── <span class="fn">rate-limiter</span>/
+├── <span class="fn">sync-engine</span>/
+└── <span class="cm">... (one module per problem)</span>
+    </div>
+
+    <div class="rules-grid">
+      <div class="rule-card">
+        <h4>Module Rules</h4>
+        <ul>
+          <li>One Android module per problem</li>
+          <li>Module named clearly (kebab-case)</li>
+          <li>Empty Activity is acceptable — no UI needed</li>
+          <li>Each module is self-contained and independently runnable</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h4>Package Rules</h4>
+        <ul>
+          <li>One package per approach inside each module</li>
+          <li>Named <code style="color:var(--accent-2)">approach_01_xxx/</code>, <code style="color:var(--accent-2)">approach_02_xxx/</code> etc.</li>
+          <li>Package name should reflect the pattern/approach used</li>
+          <li>Shared utilities may live in a <code style="color:var(--accent-2)">common/</code> package</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h4>Documentation Rules</h4>
+        <ul>
+          <li>Each approach must have a top-level KDoc comment block</li>
+          <li>Document: pattern used, trade-offs, when to prefer this approach</li>
+          <li>Contrast explicitly with the other approaches in the same module</li>
+          <li>No external README files required — inline docs are sufficient</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h4>Testing Rules</h4>
+        <ul>
+          <li>All solutions verified via Unit Tests only — no UI tests</li>
+          <li>Use JUnit4/5, MockK, Kotlin Coroutines Test as needed</li>
+          <li>Tests must cover core behavior AND edge cases</li>
+          <li>Test class per approach, clearly named</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── APPROACH PHILOSOPHY ── -->
+  <div class="spacer">
+    <div class="section-title"><span class="dot"></span>Approach Philosophy</div>
+    <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:20px; line-height:1.8;">
+      Each problem must be solved using <strong style="color:var(--text)">multiple distinct approaches</strong>.
+      Not every approach needs to be optimal — the goal is to demonstrate deep reasoning about trade-offs
+      and articulate <em>when each design makes sense</em>. Approaches can vary along the following axes:
+    </p>
+    <div class="axis-grid">
+      <div class="axis-card axis-blue">
+        <div class="axis-label">Design Pattern</div>
+        <div class="axis-examples">Strategy · Command · Observer · Decorator · Chain of Responsibility · State Machine · Builder · Proxy · Template Method · Facade · Composite</div>
+      </div>
+      <div class="axis-card axis-green">
+        <div class="axis-label">Architectural Style</div>
+        <div class="axis-examples">Pull vs Push · Reactive vs Imperative · Eager vs Lazy · Centralized vs Distributed · Event-driven vs Request-response</div>
+      </div>
+      <div class="axis-card axis-red">
+        <div class="axis-label">Concurrency Model</div>
+        <div class="axis-examples">Coroutines + Flow · SharedFlow / StateFlow · Thread pools · Actors · Lock-free structures · Mutex vs CAS</div>
+      </div>
+      <div class="axis-card axis-gold">
+        <div class="axis-label">Trade-off Axis</div>
+        <div class="axis-examples">Memory vs Speed · Simplicity vs Extensibility · Consistency vs Availability · Latency vs Throughput · Strong vs Eventual consistency</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PROBLEMS ── -->
+  <div class="problems-section">
+    <div class="section-title"><span class="dot"></span>20 System Design Problems</div>
+
+    <!-- Networking -->
+    <div class="group-header">
+      <span class="icon">📡</span> Networking &amp; Data Layer
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#01</div>
+      <div>
+        <div class="problem-name">Image Loading Library</div>
+        <div class="problem-desc">Memory + disk cache layering, request deduplication, cancellation, transformation pipeline. Similar scope to Glide/Coil internals.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#02</div>
+      <div>
+        <div class="problem-name">HTTP Client with Retry &amp; Circuit Breaker</div>
+        <div class="problem-desc">Exponential backoff, failure thresholds, half-open state, bulkhead isolation, timeout policies.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#03</div>
+      <div>
+        <div class="problem-name">Offline-First Sync Engine</div>
+        <div class="problem-desc">Conflict resolution strategies (last-write-wins, CRDT-inspired, server-wins), dirty state tracking, sync queue management, retry scheduling.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#04</div>
+      <div>
+        <div class="problem-name">Pagination Engine</div>
+        <div class="problem-desc">Page-based vs cursor-based, prefetching, boundary callbacks, error recovery, bidirectional loading.</div>
+      </div>
+    </div>
+
+    <!-- Storage -->
+    <div class="group-header">
+      <span class="icon">💾</span> Storage &amp; Caching
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#05</div>
+      <div>
+        <div class="problem-name">LRU Cache</div>
+        <div class="problem-desc">Thread-safe, memory-bounded, pluggable eviction policies (LRU, LFU, ARC, TinyLFU). Benchmark comparison across policies.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#06</div>
+      <div>
+        <div class="problem-name">Key-Value Store</div>
+        <div class="problem-desc">In-memory vs persisted, write-ahead log (WAL), compaction strategies, snapshot isolation, ACID-lite guarantees.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#07</div>
+      <div>
+        <div class="problem-name">File Download Manager</div>
+        <div class="problem-desc">Resumable downloads, priority queue (heap-based vs ordered), concurrency control, progress tracking, partial content handling.</div>
+      </div>
+    </div>
+
+    <!-- Messaging -->
+    <div class="group-header">
+      <span class="icon">🔔</span> Messaging &amp; Events
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#08</div>
+      <div>
+        <div class="problem-name">In-App Event &amp; State Broadcasting System</div>
+        <div class="problem-desc">SharedFlow vs StateFlow vs Channel, lifecycle-aware consumption, backpressure strategies, decoupled component communication. Highlight why EventBus is superseded by coroutine-based approaches.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#09</div>
+      <div>
+        <div class="problem-name">Push Notification System</div>
+        <div class="problem-desc">Token lifecycle management, deduplication, local scheduling fallback, silent vs visible notification routing, batching.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#10</div>
+      <div>
+        <div class="problem-name">Real-Time Messaging System</div>
+        <div class="problem-desc">WebSocket-based architecture, message ordering guarantees, delivery receipts, reconnection strategy with exponential backoff, presence detection.</div>
+      </div>
+    </div>
+
+    <!-- Concurrency -->
+    <div class="group-header">
+      <span class="icon">⚙️</span> Concurrency &amp; Scheduling
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#11</div>
+      <div>
+        <div class="problem-name">Task Scheduler &amp; Job Queue</div>
+        <div class="problem-desc">Priority queues, dependency graphs (DAG-based chaining), retry policies with backoff, cancellation propagation, deadline scheduling.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#12</div>
+      <div>
+        <div class="problem-name">Rate Limiter</div>
+        <div class="problem-desc">Token bucket vs leaky bucket vs sliding window log vs fixed window counter. Distributed vs local enforcement. Coroutine-safe implementations.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#13</div>
+      <div>
+        <div class="problem-name">Background Task System</div>
+        <div class="problem-desc">Constraint-based execution (network, battery, storage), task chaining, persistence across restarts, WorkManager-inspired design.</div>
+      </div>
+    </div>
+
+    <!-- Observability -->
+    <div class="group-header">
+      <span class="icon">📊</span> Observability &amp; Reliability
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#14</div>
+      <div>
+        <div class="problem-name">Analytics &amp; Event Logging Pipeline</div>
+        <div class="problem-desc">Batching strategies, flush triggers (time-based, size-based, lifecycle-based), ordering guarantees, loss tolerance, retry with deduplication.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#15</div>
+      <div>
+        <div class="problem-name">Crash &amp; ANR Reporter</div>
+        <div class="problem-desc">Signal and uncaught exception handling, breadcrumb trail construction, offline buffering, deduplication, symbolication pipeline.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#16</div>
+      <div>
+        <div class="problem-name">Feature Flag System</div>
+        <div class="problem-desc">Remote config pull vs push, local override, gradual rollout (percentage bucketing), kill switch, experiment assignment, cache invalidation.</div>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="group-header">
+      <span class="icon">🧩</span> App Architecture
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#17</div>
+      <div>
+        <div class="problem-name">Dependency Injection Framework</div>
+        <div class="problem-desc">Graph resolution, scoping (singleton / component / factory), lazy vs eager initialization, circular dependency detection, simplified Dagger/Hilt internals.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#18</div>
+      <div>
+        <div class="problem-name">Navigation &amp; Back Stack Manager</div>
+        <div class="problem-desc">Deep link handling, state restoration, multi-stack (bottom nav), transition orchestration, result passing between destinations.</div>
+      </div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-num">#19</div>
+      <div>
+        <div class="problem-name">Plugin &amp; Dynamic Module System</div>
+        <div class="problem-desc">Inter-module communication contracts, dynamic feature loading, isolation boundaries, versioning, dependency resolution between plugins.</div>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="group-header">
+      <span class="icon">🔒</span> Security &amp; Auth
+      <span class="line"></span>
+    </div>
+
+    <div class="problem-card">
+      <div class="problem-num">#20</div>
+      <div>
+        <div class="problem-name">Token Manager &amp; Auth System</div>
+        <div class="problem-desc">Access + refresh token lifecycle, concurrent request queuing during token refresh, secure storage (Keystore-backed), session expiry, multi-account support.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PRIORITY TABLE ── -->
+  <div class="spacer">
+    <div class="section-title"><span class="dot"></span>L6 Interview Priority</div>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
+      Problems most likely to appear or be referenced in a Google L6 Android Staff Engineer round, based on cross-cutting complexity and trade-off surface area.
+    </p>
+    <table class="priority-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Problem</th>
+          <th>Priority</th>
+          <th>Why it matters at L6</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>#03</td>
+          <td class="name-col">Offline-First Sync Engine</td>
+          <td class="p-high">🔴 High</td>
+          <td>Conflict resolution + distributed systems thinking</td>
+        </tr>
+        <tr>
+          <td>#01</td>
+          <td class="name-col">Image Loading Library</td>
+          <td class="p-high">🔴 High</td>
+          <td>Cache layering, memory management, cancellation</td>
+        </tr>
+        <tr>
+          <td>#11</td>
+          <td class="name-col">Task Scheduler &amp; Job Queue</td>
+          <td class="p-high">🔴 High</td>
+          <td>DAG scheduling, concurrency, cancellation propagation</td>
+        </tr>
+        <tr>
+          <td>#12</td>
+          <td class="name-col">Rate Limiter</td>
+          <td class="p-high">🔴 High</td>
+          <td>Multiple algorithms, trade-offs, thread safety</td>
+        </tr>
+        <tr>
+          <td>#14</td>
+          <td class="name-col">Analytics Pipeline</td>
+          <td class="p-high">🔴 High</td>
+          <td>Batching, reliability, ordering — classic infra problem</td>
+        </tr>
+        <tr>
+          <td>#17</td>
+          <td class="name-col">Dependency Injection Framework</td>
+          <td class="p-high">🔴 High</td>
+          <td>Graph theory, scoping, Android-specific lifecycle</td>
+        </tr>
+        <tr>
+          <td>#05</td>
+          <td class="name-col">LRU Cache</td>
+          <td class="p-med">🟡 Medium</td>
+          <td>Classic but expected at L6 — must go beyond basic impl</td>
+        </tr>
+        <tr>
+          <td>#08</td>
+          <td class="name-col">Event Broadcasting System</td>
+          <td class="p-med">🟡 Medium</td>
+          <td>Modern coroutine patterns, lifecycle awareness</td>
+        </tr>
+        <tr>
+          <td>#20</td>
+          <td class="name-col">Token Manager &amp; Auth</td>
+          <td class="p-med">🟡 Medium</td>
+          <td>Concurrency edge cases, security, session management</td>
+        </tr>
+        <tr>
+          <td>#16</td>
+          <td class="name-col">Feature Flag System</td>
+          <td class="p-med">🟡 Medium</td>
+          <td>Rollout strategy, bucketing, experimentation</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── CLAUDE CODE PROMPT ── -->
+  <div class="spacer">
+    <div class="section-title"><span class="dot"></span>Claude Code Prompt</div>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Copy and paste the following prompt directly into Claude Code to begin scaffolding the project.</p>
+    <div class="prompt-block">
+      <p>Set up a <strong>SystemDesign/</strong> directory in this Android project. For each problem listed below, create a separate Android module. Follow these rules strictly.</p>
+
+      <h3>Structure Rules</h3>
+      <ul>
+        <li>One module per problem, named in kebab-case (e.g. <strong>image-loader/</strong>, <strong>rate-limiter/</strong>)</li>
+        <li>Inside each module, one package per approach: <strong>approach_01_strategy_pattern/</strong>, <strong>approach_02_reactive/</strong> etc.</li>
+        <li>No UI required — an empty Activity is fine</li>
+        <li>All solutions must be runnable and verifiable via <strong>Unit Tests only</strong> (JUnit, MockK, Coroutines Test)</li>
+      </ul>
+
+      <h3>Per-Approach Requirements</h3>
+      <ul>
+        <li>A KDoc block at the top explaining: pattern/approach used, trade-offs, and when to prefer it over the others in this module</li>
+        <li>Unit tests covering core behavior and edge cases</li>
+        <li>At minimum 2–3 distinct approaches per problem</li>
+      </ul>
+
+      <h3>Approach Variation Axes</h3>
+      <ul>
+        <li><strong>Design Pattern:</strong> Strategy, Command, Observer, Decorator, Chain of Responsibility, State Machine, Builder, Proxy, Template Method, Facade, Composite, etc.</li>
+        <li><strong>Architecture:</strong> Pull vs Push · Reactive vs Imperative · Eager vs Lazy · Centralized vs Distributed</li>
+        <li><strong>Concurrency:</strong> Coroutines + Flow · SharedFlow / StateFlow · Thread pools · Actors · Lock-free structures</li>
+        <li><strong>Trade-off axis:</strong> Memory vs Speed · Simplicity vs Extensibility · Consistency vs Availability</li>
+      </ul>
+
+      <h3>Problems to Implement</h3>
+      <ul>
+        <li>#01 Image Loading Library — cache layering, deduplication, cancellation, transformation pipeline</li>
+        <li>#02 HTTP Client with Retry &amp; Circuit Breaker — backoff, thresholds, half-open state</li>
+        <li>#03 Offline-First Sync Engine — conflict resolution, dirty state, sync queue</li>
+        <li>#04 Pagination Engine — page-based vs cursor-based, prefetch, boundary callbacks</li>
+        <li>#05 LRU Cache — thread-safe, memory-bounded, pluggable eviction (LRU/LFU/TinyLFU)</li>
+        <li>#06 Key-Value Store — in-memory vs persisted, WAL, compaction</li>
+        <li>#07 File Download Manager — resumable, priority queue, concurrency, progress</li>
+        <li>#08 In-App Event &amp; State Broadcasting — SharedFlow vs StateFlow vs Channel, backpressure</li>
+        <li>#09 Push Notification System — token lifecycle, deduplication, local scheduling fallback</li>
+        <li>#10 Real-Time Messaging System — WebSocket, ordering, delivery receipts, reconnection</li>
+        <li>#11 Task Scheduler &amp; Job Queue — priority, DAG chaining, retry, cancellation</li>
+        <li>#12 Rate Limiter — token bucket vs leaky bucket vs sliding window vs fixed window</li>
+        <li>#13 Background Task System — constraints, chaining, persistence across restarts</li>
+        <li>#14 Analytics &amp; Event Logging Pipeline — batching, flush triggers, ordering, retry</li>
+        <li>#15 Crash &amp; ANR Reporter — signal handling, breadcrumbs, offline buffer, deduplication</li>
+        <li>#16 Feature Flag System — remote config, local override, gradual rollout, kill switch</li>
+        <li>#17 Dependency Injection Framework — graph resolution, scoping, lazy vs eager</li>
+        <li>#18 Navigation &amp; Back Stack Manager — deep links, multi-stack, state restoration</li>
+        <li>#19 Plugin &amp; Dynamic Module System — inter-module contracts, dynamic loading, isolation</li>
+        <li>#20 Token Manager &amp; Auth System — token refresh, concurrent queuing, secure storage</li>
+      </ul>
+
+      <p style="margin-top:16px; color:var(--accent-2)"><strong>Start by confirming the module list and directory structure. Do not write any code yet. This targets a Google L6 / Staff Engineer Android interview.</strong></p>
+    </div>
+  </div>
+
+  <!-- ── TECH STACK ── -->
+  <div class="spacer">
+    <div class="section-title"><span class="dot"></span>Recommended Tech Stack</div>
+    <div class="rules-grid">
+      <div class="rule-card">
+        <h4>Language &amp; Runtime</h4>
+        <ul>
+          <li>Kotlin (primary) — idiomatic, coroutine-native</li>
+          <li>Kotlin Coroutines + Flow for concurrency</li>
+          <li>StateFlow / SharedFlow / Channel for reactive streams</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h4>Testing</h4>
+        <ul>
+          <li>JUnit 4 / JUnit 5</li>
+          <li>MockK for mocking Kotlin classes</li>
+          <li>kotlinx-coroutines-test for coroutine testing</li>
+          <li>Turbine for Flow testing</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h4>Build</h4>
+        <ul>
+          <li>Gradle with Kotlin DSL</li>
+          <li>One settings.gradle including all modules</li>
+          <li>Shared version catalog (libs.versions.toml)</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h4>No UI Dependencies</h4>
+        <ul>
+          <li>No ViewModel, LiveData, Compose, or XML layouts required</li>
+          <li>Avoid Android framework classes where possible — prefer pure Kotlin</li>
+          <li>Empty Activity only where Android module structure demands it</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ FOOTER ══════════════════════════════════════════════════════════ -->
+<footer>
+  <span>Android System Design · Google L6 Interview Prep</span>
+  <span style="color:var(--border)">|</span>
+  <span>20 Problems · 5 Categories · Multiple Approaches Per Problem</span>
+</footer>
+
+</body>
+</html>
