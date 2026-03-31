@@ -40,17 +40,22 @@ class VehicleRentalTest {
     }
     
     private fun createWeekdayPeriod(days: Long = 3): RentalPeriod {
-        val start = LocalDateTime.of(2026, Month.MARCH, 23, 10, 0) // Monday
-        return RentalPeriod(start, start.plusDays(days))
+        val start = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0)
+        val adjustedStart = if (start.dayOfWeek == java.time.DayOfWeek.SATURDAY) start.plusDays(2)
+            else if (start.dayOfWeek == java.time.DayOfWeek.SUNDAY) start.plusDays(1)
+            else start
+        return RentalPeriod(adjustedStart, adjustedStart.plusDays(days))
     }
     
     private fun createWeekendPeriod(): RentalPeriod {
-        val start = LocalDateTime.of(2026, Month.MARCH, 27, 10, 0) // Friday
-        return RentalPeriod(start, start.plusDays(3)) // Fri-Sun
+        val now = LocalDateTime.now().withHour(10).withMinute(0).withSecond(0).withNano(0)
+        val daysUntilFriday = (java.time.DayOfWeek.FRIDAY.value - now.dayOfWeek.value + 7) % 7
+        val friday = now.plusDays(daysUntilFriday.toLong() + 7)
+        return RentalPeriod(friday, friday.plusDays(3))
     }
     
     private fun createLongTermPeriod(): RentalPeriod {
-        val start = LocalDateTime.of(2026, Month.MARCH, 23, 10, 0)
+        val start = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0)
         return RentalPeriod(start, start.plusDays(14))
     }
     
