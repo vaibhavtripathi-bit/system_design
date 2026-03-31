@@ -3,6 +3,7 @@ package com.systemdesign.chess
 import com.systemdesign.chess.common.*
 import com.systemdesign.chess.approach_01_strategy_movement.*
 import com.systemdesign.chess.approach_02_command_memento.*
+import com.systemdesign.chess.approach_03_observer_events.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -427,6 +428,89 @@ class ChessGameTest {
             )
             
             assertEquals("Qf7#", move.toAlgebraic())
+        }
+    }
+    
+    @Nested
+    inner class EventDrivenChessGameTest {
+        
+        private lateinit var game: EventDrivenChessGame
+        private lateinit var logger: MoveLogger
+        private lateinit var analyzer: GameAnalyzer
+        private lateinit var spectator: SpectatorNotifier
+        
+        @BeforeEach
+        fun setup() {
+            game = EventDrivenChessGame()
+            logger = MoveLogger()
+            analyzer = GameAnalyzer()
+            spectator = SpectatorNotifier()
+            game.addObserver(logger)
+            game.addObserver(analyzer)
+            game.addObserver(spectator)
+        }
+        
+        @Test
+        fun `move publishes events to logger`() {
+            game.makeMove(Position(1, 4), Position(3, 4))
+            
+            val log = logger.getLog()
+            assertTrue(log.isNotEmpty())
+            assertTrue(log.any { it.contains("e4") })
+        }
+        
+        @Test
+        fun `analyzer tracks total moves`() {
+            game.makeMove(Position(1, 4), Position(3, 4))
+            game.makeMove(Position(6, 4), Position(4, 4))
+            
+            assertEquals(2, analyzer.getTotalMoves())
+        }
+        
+        @Test
+        fun `capture publishes PieceCaptured event`() {
+            game.makeMove(Position(1, 4), Position(3, 4))
+            game.makeMove(Position(6, 3), Position(4, 3))
+            game.makeMove(Position(3, 4), Position(4, 3))
+            
+            assertEquals(1, analyzer.getCaptureCount(Color.WHITE))
+        }
+        
+        @Test
+        fun `spectator receives notifications`() {
+            game.makeMove(Position(1, 4), Position(3, 4))
+            
+            val notifications = spectator.getNotifications()
+            assertTrue(notifications.isNotEmpty())
+        }
+        
+        @Test
+        fun `spectator listener is called`() {
+            val received = mutableListOf<String>()
+            spectator.addSpectator { received.add(it.message) }
+            
+            game.makeMove(Position(1, 4), Position(3, 4))
+            
+            assertTrue(received.isNotEmpty())
+        }
+        
+        @Test
+        fun `resign publishes GameOver event`() {
+            game.resign(Color.BLACK)
+            
+            assertEquals(GameState.RESIGNED, game.getGameState())
+            val notifications = spectator.getNotifications()
+            assertTrue(notifications.any { it.message.contains("wins") })
+        }
+        
+        @Test
+        fun `timer manager tracks time`() {
+            val timer = TimerManager(initialTimeMs = 600_000, incrementMs = 0)
+            game.addObserver(timer)
+            
+            game.makeMove(Position(1, 4), Position(3, 4))
+            
+            assertTrue(timer.getRemainingTime(Color.WHITE) <= 600_000)
         }
     }
 }

@@ -3,6 +3,7 @@ package com.systemdesign.atm
 import com.systemdesign.atm.common.*
 import com.systemdesign.atm.approach_01_state_machine.StateMachineATM
 import com.systemdesign.atm.approach_02_chain_responsibility.*
+import com.systemdesign.atm.approach_03_template_method.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -110,6 +111,77 @@ class ATMTest {
         fun `canDispense returns false for impossible amounts`() {
             val dispenser = ChainBasedDispenser(listOf(CashCassette(100, 1)))
             assertFalse(dispenser.canDispense(150))
+        }
+    }
+    
+    @Nested
+    inner class TemplateMethodTest {
+        private val cassettes = listOf(CashCassette(100, 10), CashCassette(50, 20), CashCassette(20, 30))
+        private lateinit var processor: ATMTransactionProcessor
+        
+        @BeforeEach
+        fun setup() {
+            processor = ATMTransactionProcessor(mockBankingService, cassettes)
+        }
+        
+        @Test
+        fun `withdrawal succeeds with valid credentials`() {
+            val result = processor.processTransaction(
+                TransactionType.WITHDRAWAL, testCard, "1234", amount = 200.0
+            )
+            assertTrue(result is TransactionResult.Success)
+            val receipt = (result as TransactionResult.Success).receipt
+            assertEquals(TransactionType.WITHDRAWAL, receipt.type)
+            assertEquals(TransactionStatus.SUCCESS, receipt.status)
+        }
+        
+        @Test
+        fun `withdrawal fails with wrong PIN`() {
+            val result = processor.processTransaction(
+                TransactionType.WITHDRAWAL, testCard, "0000", amount = 200.0
+            )
+            assertTrue(result is TransactionResult.Failure)
+            assertEquals("Authentication failed", (result as TransactionResult.Failure).reason)
+        }
+        
+        @Test
+        fun `deposit requires envelope ID`() {
+            val result = processor.processTransaction(
+                TransactionType.DEPOSIT, testCard, "1234", amount = 500.0
+            )
+            assertTrue(result is TransactionResult.Failure)
+        }
+        
+        @Test
+        fun `deposit succeeds with envelope`() {
+            val result = processor.processTransaction(
+                TransactionType.DEPOSIT, testCard, "1234",
+                amount = 500.0, depositEnvelopeId = "ENV-001"
+            )
+            assertTrue(result is TransactionResult.Success)
+        }
+        
+        @Test
+        fun `balance inquiry always succeeds`() {
+            val result = processor.processTransaction(
+                TransactionType.BALANCE_INQUIRY, testCard, "1234"
+            )
+            assertTrue(result is TransactionResult.Success)
+        }
+        
+        @Test
+        fun `transfer requires target account`() {
+            val result = processor.processTransaction(
+                TransactionType.TRANSFER, testCard, "1234", amount = 100.0
+            )
+            assertTrue(result is TransactionResult.Failure)
+        }
+        
+        @Test
+        fun `transaction log records all transactions`() {
+            processor.processTransaction(TransactionType.BALANCE_INQUIRY, testCard, "1234")
+            processor.processTransaction(TransactionType.WITHDRAWAL, testCard, "1234", amount = 100.0)
+            assertEquals(2, processor.getTransactionLog().size)
         }
     }
 }

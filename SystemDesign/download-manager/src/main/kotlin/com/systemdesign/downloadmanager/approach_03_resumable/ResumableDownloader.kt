@@ -63,7 +63,10 @@ class ResumableDownloadManager(
                 data[id] = content
                 updateDownload(id) { it.copy(downloadedBytes = totalSize, state = DownloadState.COMPLETED) }
             } catch (e: CancellationException) {
-                updateDownload(id) { it.copy(state = DownloadState.PAUSED) }
+                val current = downloads[id]?.state
+                if (current != DownloadState.CANCELLED) {
+                    updateDownload(id) { it.copy(state = DownloadState.PAUSED) }
+                }
                 throw e
             } catch (e: Exception) {
                 updateDownload(id) { it.copy(state = DownloadState.FAILED) }

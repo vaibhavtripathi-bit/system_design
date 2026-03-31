@@ -1,9 +1,13 @@
 package com.systemdesign.kvstore
 
 import com.systemdesign.kvstore.approach_01_memory.*
+import com.systemdesign.kvstore.approach_02_persistent.*
 import com.systemdesign.kvstore.approach_03_sharded.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import java.nio.file.Files
 
 class KVStoreTest {
 
@@ -141,5 +145,114 @@ class KVStoreTest {
         
         assertEquals(1000, store.size())
         repeat(1000) { assertEquals("value$it", store.get("key$it")) }
+    }
+
+    // Persistent KV Store Tests
+    private fun createPersistentStore(dir: java.io.File, flushIntervalMs: Long = 60_000) =
+        PersistentKVStore(dir, StringSerializer(), StringSerializer(), flushIntervalMs)
+
+    @Test
+    fun `persistent - put and get`() = runBlocking {
+        val dir = Files.createTempDirectory("kvtest").toFile()
+        try {
+            val store = createPersistentStore(dir)
+            store.put("key1", "value1")
+            assertEquals("value1", store.get("key1"))
+            store.shutdown()
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `persistent - persists across instances`() = runBlocking {
+        val dir = Files.createTempDirectory("kvtest").toFile()
+        try {
+            val store1 = createPersistentStore(dir)
+            store1.put("key1", "value1")
+            store1.put("key2", "value2")
+            store1.flush()
+            store1.shutdown()
+
+            val store2 = createPersistentStore(dir)
+            assertEquals("value1", store2.get("key1"))
+            assertEquals("value2", store2.get("key2"))
+            store2.shutdown()
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `persistent - remove deletes from disk`() = runBlocking {
+        val dir = Files.createTempDirectory("kvtest").toFile()
+        try {
+            val store = createPersistentStore(dir)
+            store.put("key1", "value1")
+            store.flush()
+
+            store.remove("key1")
+            assertNull(store.get("key1"))
+            delay(100)
+            store.shutdown()
+
+            val store2 = createPersistentStore(dir)
+            assertNull(store2.get("key1"))
+            store2.shutdown()
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `persistent - clear removes all`() = runBlocking {
+        val dir = Files.createTempDirectory("kvtest").toFile()
+        try {
+            val store = createPersistentStore(dir)
+            store.put("key1", "value1")
+            store.put("key2", "value2")
+            store.flush()
+
+            store.clear()
+
+            assertEquals(0, store.size())
+            assertNull(store.get("key1"))
+            store.shutdown()
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `persistent - size tracks entries`() = runBlocking {
+        val dir = Files.createTempDirectory("kvtest").toFile()
+        try {
+            val store = createPersistentStore(dir)
+            assertEquals(0, store.size())
+            store.put("key1", "value1")
+            assertEquals(1, store.size())
+            store.put("key2", "value2")
+            assertEquals(2, store.size())
+            store.remove("key1")
+            assertEquals(1, store.size())
+            store.shutdown()
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `persistent - contains works`() = runBlocking {
+        val dir = Files.createTempDirectory("kvtest").toFile()
+        try {
+            val store = createPersistentStore(dir)
+            store.put("key1", "value1")
+
+            assertTrue(store.contains("key1"))
+            assertFalse(store.contains("key2"))
+            store.shutdown()
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 }

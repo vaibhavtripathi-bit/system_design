@@ -1,6 +1,7 @@
 package com.systemdesign.realtimemessaging
 
 import com.systemdesign.realtimemessaging.approach_01_polling.*
+import com.systemdesign.realtimemessaging.approach_02_websocket.*
 import com.systemdesign.realtimemessaging.approach_03_pubsub.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -173,6 +174,95 @@ class RealtimeMessagingTest {
         job.cancel()
         
         assertEquals(1, received.size)
+        client.shutdown()
+    }
+
+    // WebSocket Tests
+    class MockWebSocketConnection : WebSocketConnection {
+        var connected = false
+        val sentMessages = CopyOnWriteArrayList<String>()
+        private var messageHandler: ((String) -> Unit)? = null
+        private var disconnectHandler: (() -> Unit)? = null
+
+        override suspend fun connect(url: String) { connected = true }
+        override suspend fun send(message: String) { sentMessages.add(message) }
+        override suspend fun disconnect() {
+            connected = false
+            disconnectHandler?.invoke()
+        }
+        override fun onMessage(handler: (String) -> Unit) { messageHandler = handler }
+        override fun onDisconnect(handler: () -> Unit) { disconnectHandler = handler }
+
+        fun simulateMessage(raw: String) { messageHandler?.invoke(raw) }
+    }
+
+    @Test
+    fun `websocket - connect changes state to CONNECTED`() = runBlocking {
+        val conn = MockWebSocketConnection()
+        val client = WebSocketMessagingClient(conn, "ws://test", dispatcher = Dispatchers.Unconfined)
+
+        assertEquals(ConnectionState.DISCONNECTED, client.state.value)
+        client.connect()
+        assertEquals(ConnectionState.CONNECTED, client.state.value)
+        client.shutdown()
+    }
+
+    @Test
+    fun `websocket - subscribe sends subscribe message`() = runBlocking {
+        val conn = MockWebSocketConnection()
+        val client = WebSocketMessagingClient(conn, "ws://test", dispatcher = Dispatchers.Unconfined)
+
+        client.connect()
+        client.subscribe("channel1")
+
+        assertTrue(conn.sentMessages.any { it.contains("subscribe") && it.contains("channel1") })
+        client.shutdown()
+    }
+
+    @Test
+    fun `websocket - messages are filtered by channel`() = runBlocking {
+        val conn = MockWebSocketConnection()
+        val client = WebSocketMessagingClient(conn, "ws://test", dispatcher = Dispatchers.Unconfined)
+
+        client.connect()
+        val received = CopyOnWriteArrayList<Message>()
+
+        val job = launch(Dispatchers.Unconfined) {
+            client.subscribe("ch1").take(1).collect { received.add(it) }
+        }
+
+        conn.simulateMessage("1|ch1|user1|Hello")
+        conn.simulateMessage("2|ch2|user1|Wrong")
+
+        delay(50)
+        job.cancelAndJoin()
+
+        assertEquals(1, received.size)
+        assertEquals("ch1", received[0].channelId)
+        client.shutdown()
+    }
+
+    @Test
+    fun `websocket - disconnect changes state`() = runBlocking {
+        val conn = MockWebSocketConnection()
+        val client = WebSocketMessagingClient(conn, "ws://test", dispatcher = Dispatchers.Unconfined)
+
+        client.connect()
+        assertEquals(ConnectionState.CONNECTED, client.state.value)
+
+        client.disconnect()
+        assertEquals(ConnectionState.DISCONNECTED, client.state.value)
+        client.shutdown()
+    }
+
+    @Test
+    fun `websocket - send throws when not connected`() = runBlocking {
+        val conn = MockWebSocketConnection()
+        val client = WebSocketMessagingClient(conn, "ws://test", dispatcher = Dispatchers.Unconfined)
+
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { client.send("ch1", "Hello") }
+        }
         client.shutdown()
     }
 }

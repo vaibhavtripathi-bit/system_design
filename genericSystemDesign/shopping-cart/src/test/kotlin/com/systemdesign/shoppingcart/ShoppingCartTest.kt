@@ -3,6 +3,7 @@ package com.systemdesign.shoppingcart
 import com.systemdesign.shoppingcart.common.*
 import com.systemdesign.shoppingcart.approach_01_decorator_discount.*
 import com.systemdesign.shoppingcart.approach_02_state_machine.*
+import com.systemdesign.shoppingcart.approach_03_strategy_pricing.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -154,6 +155,98 @@ class ShoppingCartTest {
             machine.transition(OrderState.SHIPPED)
             machine.transition(OrderState.DELIVERED)
             assertEquals(OrderState.DELIVERED, machine.getState())
+        }
+    }
+    
+    @Nested
+    inner class StrategyPricingTest {
+        private val regularCustomer = CustomerProfile("C1", CustomerType.REGULAR)
+        private val memberCustomer = CustomerProfile("C2", CustomerType.MEMBER, loyaltyPoints = 500)
+        private val loyalMember = CustomerProfile("C3", CustomerType.MEMBER, loyaltyPoints = 1500)
+        private val wholesaleCustomer = CustomerProfile("C4", CustomerType.WHOLESALE)
+        
+        @Test
+        fun `regular pricing has no discount`() {
+            val strategy = RegularPricing()
+            val item = CartItem(product1, 1)
+            val result = strategy.calculatePrice(item, regularCustomer)
+            
+            assertEquals(1000.0, result.lineTotal)
+            assertEquals(0.0, result.discount)
+        }
+        
+        @Test
+        fun `member pricing applies base discount`() {
+            val strategy = MemberPricing(baseDiscountPercent = 10.0)
+            val item = CartItem(product1, 1)
+            val result = strategy.calculatePrice(item, memberCustomer)
+            
+            assertEquals(900.0, result.lineTotal)
+            assertEquals(100.0, result.discount)
+        }
+        
+        @Test
+        fun `member pricing adds loyalty bonus`() {
+            val strategy = MemberPricing(baseDiscountPercent = 10.0, loyaltyBonusThreshold = 1000, loyaltyBonusPercent = 5.0)
+            val item = CartItem(product1, 1)
+            val result = strategy.calculatePrice(item, loyalMember)
+            
+            assertEquals(850.0, result.lineTotal)
+            assertEquals(150.0, result.discount)
+        }
+        
+        @Test
+        fun `wholesale pricing applies tiered discount`() {
+            val strategy = WholesalePricing()
+            val item = CartItem(product2, 50)
+            val result = strategy.calculatePrice(item, wholesaleCustomer)
+            
+            val baseTotal = 50.0 * 50
+            assertEquals(baseTotal * 0.9, result.lineTotal)
+        }
+        
+        @Test
+        fun `flat tax applies to all items`() {
+            val tax = FlatTaxStrategy(0.08)
+            val items = listOf(
+                PricingLineItem(product1, 1, 1000.0, 1000.0, 0.0, null)
+            )
+            val taxItems = tax.calculateTax(items)
+            
+            assertEquals(1, taxItems.size)
+            assertEquals(80.0, taxItems[0].taxAmount)
+        }
+        
+        @Test
+        fun `exemption tax skips exempt categories`() {
+            val tax = ExemptionTaxStrategy(setOf("clothing"), 0.10)
+            val items = listOf(
+                PricingLineItem(product1, 1, 1000.0, 1000.0, 0.0, null),
+                PricingLineItem(product3, 1, 30.0, 30.0, 0.0, null)
+            )
+            val taxItems = tax.calculateTax(items)
+            
+            val salesTax = taxItems.find { it.description == "Sales Tax" }
+            assertEquals(100.0, salesTax?.taxAmount)
+            val exempt = taxItems.find { it.description == "Tax Exempt" }
+            assertEquals(0.0, exempt?.taxAmount)
+        }
+        
+        @Test
+        fun `pricing engine selects strategy by customer type`() {
+            val engine = PricingEngineBuilder()
+                .withMemberPricing(10.0)
+                .withFlatTax(0.0)
+                .build()
+            
+            val cart = Cart()
+            cart.addItem(product1)
+            
+            val regularResult = engine.calculateTotal(cart, regularCustomer)
+            val memberResult = engine.calculateTotal(cart, memberCustomer)
+            
+            assertEquals(1000.0, regularResult.subtotal)
+            assertEquals(900.0, memberResult.subtotal)
         }
     }
 }

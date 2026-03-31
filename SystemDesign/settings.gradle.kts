@@ -47,5 +47,9 @@ include(":dependency-injection")
 include(":navigation-manager")
 include(":plugin-system")
 
+// Resilience & Pooling
+include(":circuit-breaker")
+include(":connection-pool")
+
 // Security & Auth
 include(":token-manager")
